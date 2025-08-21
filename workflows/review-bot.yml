@@ -1,0 +1,46 @@
+name: Review Bot
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      # SECURITY: pull_request_target -> never run PR's code.
+      # We check out the BASE ref (clean repo code where this workflow lives).
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install langchain-openai requests pyyaml rich
+
+      - name: Run review bot
+        env:
+          # GitHub
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Confluence (repo/org secrets)
+          CONF_USERNAME: ${{ secrets.CONF_USERNAME }}
+          CONF_API: ${{ secrets.CONF_API }}
+          CONF_URL: ${{ secrets.CONF_URL }}
+
+          # Azure OpenAI (repo/org secrets)
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: ${{ secrets.AZURE_OPENAI_API_VERSION }}
+          AZURE_OPENAI_DEPLOYMENT: ${{ secrets.AZURE_OPENAI_DEPLOYMENT }}
+        run: |
+          python main.py

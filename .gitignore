@@ -1,0 +1,46 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+*.manifest
+*.spec
+
+# --- Poetry / Virtualenv ---
+.venv/
+venv/
+poetry.lock
+
+# --- Environments / Secrets ---
+.env
+.env.*
+*.pem
+*.key
+*.p8
+
+# --- Logs ---
+*.log
+*.tmp
+
+# --- OS / Editor Junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Coverage / Testing ---
+.coverage
+.pytest_cache/
+htmlcov/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Build / Distribution ---
+build/
+dist/
