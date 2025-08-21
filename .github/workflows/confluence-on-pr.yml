@@ -13,37 +13,50 @@ permissions:
 jobs:
   post-spec:
     runs-on: ubuntu-latest
-    env:
-      URL: ${{ secrets.CONF_URL }}
     steps:
       - name: Ensure jq is available
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Fetch Confluence JSON
         env:
-          CONF_USERNAME: ${{ secrets.CONF_USERNAME }}
-          CONF_API: ${{ secrets.CONF_API }}
+          # Prefer secret; fall back to repo variable
+          CONF_URL_SECRET: ${{ secrets.CONF_URL }}
+          CONF_URL_VAR:    ${{ vars.CONF_URL }}
+          CONF_USERNAME:   ${{ secrets.CONF_USERNAME }}
+          CONF_API:        ${{ secrets.CONF_API }}
         run: |
-          set -e
-          if [ -z "$CONF_USERNAME" ] || [ -z "$CONF_API" ]; then
-            echo "Missing CONF_USERNAME / CONF_API secrets"; exit 1
+          set -euo pipefail
+
+          # Compose URL from secret or var
+          URL="${CONF_URL_SECRET:-}"
+          if [ -z "$URL" ]; then
+            URL="${CONF_URL_VAR:-}"
           fi
-          curl -s -u "$CONF_USERNAME:$CONF_API" "$URL" -o page.json
+
+          if [ -z "$URL" ]; then
+            echo "❌ URL is empty. Define CONF_URL as a repo Secret or Variable."; exit 3
+          fi
+          if [ -z "${CONF_USERNAME:-}" ] || [ -z "${CONF_API:-}" ]; then
+            echo "❌ Missing CONF_USERNAME / CONF_API secrets."; exit 3
+          fi
+
+          # Fetch page
+          STATUS=$(curl -s -w "%{http_code}" -o page.json -u "$CONF_USERNAME:$CONF_API" "$URL")
+          echo "HTTP $STATUS"
+          if [ "$STATUS" -lt 200 ] || [ "$STATUS" -gt 299 ]; then
+            echo "❌ Confluence request failed"; head -c 1000 page.json || true; exit 2
+          fi
+
           BODY=$(jq -r '.body.storage.value // empty' page.json)
           if [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
             jq . page.json > page.pretty.json
-            {
-              echo "```json"
-              cat page.pretty.json
-              echo "```"
-            } > BODY.md
+            { echo '```json'; cat page.pretty.json; echo '```'; } > BODY.md
           else
-            {
-              echo "```html"
-              printf "%s\n" "$BODY"
-              echo "```"
-            } > BODY.md
+            { echo '```html'; printf "%s\n" "$BODY"; echo '```'; } > BODY.md
           fi
+
+          # stash URL for later steps
+          echo "URL=$URL" >> $GITHUB_ENV
 
       - name: Comment on PR with spec
         uses: peter-evans/create-or-update-comment@v4
@@ -51,11 +64,10 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
           edit-mode: replace
-          # 'identifier' ensures we update our own comment on subsequent syncs
           identifier: confluence-spec-comment
           body: |
             ### 📎 Confluence Specification
-            **Source:** [Open in Confluence](https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage)
+            **Source:** ${{ env.URL }}
 
             <details>
             <summary>View fetched content</summary>
@@ -67,10 +79,11 @@ jobs:
       - name: Add Checks tab summary
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const body = fs.readFileSync('BODY.md', 'utf8');
-            const { data: checkRun } = await github.rest.checks.create({
+            await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               name: 'Confluence Spec',
@@ -80,6 +93,6 @@ jobs:
               output: {
                 title: 'Confluence Specification',
                 summary: 'Spec fetched from Confluence. Link below.',
-                text: `**Source:** https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage\n\n` + body
+                text: `**Source:** ${process.env.URL}\n\n` + body
               }
             });
