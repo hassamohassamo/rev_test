@@ -14,7 +14,7 @@ jobs:
   post-spec:
     runs-on: ubuntu-latest
     env:
-      URL: "https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage"
+      URL: ${{ vars.CONF_URL }}
     steps:
       - name: Ensure jq is available
         run: sudo apt-get update && sudo apt-get install -y jq
