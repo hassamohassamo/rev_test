@@ -14,7 +14,7 @@ jobs:
   post-spec:
     runs-on: ubuntu-latest
     env:
-      URL: ${{ vars.CONF_URL }}
+      URL: ${{ secrets.CONF_URL }}
     steps:
       - name: Ensure jq is available
         run: sudo apt-get update && sudo apt-get install -y jq
