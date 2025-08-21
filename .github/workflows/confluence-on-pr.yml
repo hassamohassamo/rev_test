@@ -1,6 +1,7 @@
 name: Confluence best practices for Python
 
 on:
+  workflow_dispatch: {}          # <-- adds the Run workflow button
   pull_request:
     types: [opened, reopened, synchronize]
 
@@ -14,8 +15,11 @@ jobs:
     env:
       URL: "https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage"
     steps:
-      - name: Checkout (needed by some actions)
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Ensure jq is installed
+        run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Fetch Confluence JSON
         env:
@@ -23,30 +27,30 @@ jobs:
           CONF_API: ${{ secrets.CONF_API }}
         run: |
           set -e
+          if [ -z "$CONF_USERNAME" ] || [ -z "$CONF_API" ]; then
+            echo "Missing CONF_USERNAME / CONF_API secrets"; exit 1
+          fi
           curl -s -u "$CONF_USERNAME:$CONF_API" "$URL" -o page.json
-          # Try to extract the Storage body (HTML-ish) if present; otherwise keep JSON
-          if command -v jq >/dev/null 2>&1; then
-            BODY=$(jq -r '.body.storage.value // empty' page.json)
-            if [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
-              # fallback to whole JSON pretty
-              jq . page.json > page.pretty.json
-              echo "```json" > BODY.md
-              cat page.pretty.json >> BODY.md
-              echo "```" >> BODY.md
-            else
-              # Put the storage body inside a code fence so GitHub keeps it readable
-              # (GitHub sanitizes HTML in comments; this is mainly for quick reference)
-              echo "```html" > BODY.md
-              printf "%s\n" "$BODY" >> BODY.md
-              echo "```" >> BODY.md
-            fi
+          BODY=$(jq -r '.body.storage.value // empty' page.json)
+          if [ -z "$BODY" ] || [ "$BODY" = "null" ]; then
+            jq . page.json > page.pretty.json
+            {
+              echo "```json"
+              cat page.pretty.json
+              echo "```"
+            } > BODY.md
           else
-            echo "jq not found" > BODY.md
+            {
+              echo "```html"
+              printf "%s\n" "$BODY"
+              echo "```"
+            } > BODY.md
           fi
 
       - name: Create or update PR comment
         uses: peter-evans/create-or-update-comment@v4
         with:
+          token: ${{ github.token }}
           issue-number: ${{ github.event.pull_request.number }}
           edit-mode: replace
           body: |
