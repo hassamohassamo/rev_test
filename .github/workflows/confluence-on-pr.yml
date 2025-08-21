@@ -1,13 +1,14 @@
 name: Confluence best practices for Python
 
 on:
-  workflow_dispatch: {}          # <-- adds the Run workflow button
-  pull_request:
+  # Triggers whenever a PR is opened, re-opened, or updated
+  pull_request_target:
     types: [opened, reopened, synchronize]
 
 permissions:
   pull-requests: write
   contents: read
+  checks: write
 
 jobs:
   post-spec:
@@ -15,10 +16,7 @@ jobs:
     env:
       URL: "https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage"
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Ensure jq is installed
+      - name: Ensure jq is available
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Fetch Confluence JSON
@@ -47,12 +45,14 @@ jobs:
             } > BODY.md
           fi
 
-      - name: Create or update PR comment
+      - name: Comment on PR with spec
         uses: peter-evans/create-or-update-comment@v4
         with:
-          token: ${{ github.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           issue-number: ${{ github.event.pull_request.number }}
           edit-mode: replace
+          # 'identifier' ensures we update our own comment on subsequent syncs
+          identifier: confluence-spec-comment
           body: |
             ### 📎 Confluence Specification
             **Source:** [Open in Confluence](https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage)
@@ -63,3 +63,23 @@ jobs:
             $(cat BODY.md)
 
             </details>
+
+      - name: Add Checks tab summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('BODY.md', 'utf8');
+            const { data: checkRun } = await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Confluence Spec',
+              head_sha: context.payload.pull_request.head.sha,
+              status: 'completed',
+              conclusion: 'neutral',
+              output: {
+                title: 'Confluence Specification',
+                summary: 'Spec fetched from Confluence. Link below.',
+                text: `**Source:** https://manulife-asia.atlassian.net/wiki/api/v2/pages/776668002?body-format=storage\n\n` + body
+              }
+            });
