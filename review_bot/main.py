@@ -1,10 +1,7 @@
 # main.py
 import os, re, html, json, requests
 from typing import List, Dict, Tuple
-from llm import review
 from review_bot.llm import review
-from .llm import review
-
 from rich import print
 
 # ---------- Confluence ----------
