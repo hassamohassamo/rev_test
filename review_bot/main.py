@@ -1,5 +1,3 @@
-````python
-# review_bot/main.py
 import os, re, html, json, requests
 from typing import List, Dict, Tuple
 from .llm import review  # if not a package, change to: from llm import review
@@ -167,4 +165,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-````
