@@ -3,7 +3,7 @@ name: Confluence best practices for Python
 on:
   # Triggers whenever a PR is opened, re-opened, or updated
   pull_request_target:
-    types: [opened, reopened, synchronize]
+    types: [opened, reopened]
 
 permissions:
   pull-requests: write
