@@ -34,17 +34,17 @@ jobs:
           fi
 
           if [ -z "$URL" ]; then
-            echo "❌ URL is empty. Define CONF_URL as a repo Secret or Variable."; exit 3
+            echo " URL is empty. Define CONF_URL as a repo Secret or Variable."; exit 3
           fi
           if [ -z "${CONF_USERNAME:-}" ] || [ -z "${CONF_API:-}" ]; then
-            echo "❌ Missing CONF_USERNAME / CONF_API secrets."; exit 3
+            echo " Missing CONF_USERNAME / CONF_API secrets."; exit 3
           fi
 
           # Fetch page
           STATUS=$(curl -s -w "%{http_code}" -o page.json -u "$CONF_USERNAME:$CONF_API" "$URL")
           echo "HTTP $STATUS"
           if [ "$STATUS" -lt 200 ] || [ "$STATUS" -gt 299 ]; then
-            echo "❌ Confluence request failed"; head -c 1000 page.json || true; exit 2
+            echo " Confluence request failed"; head -c 1000 page.json || true; exit 2
           fi
 
           BODY=$(jq -r '.body.storage.value // empty' page.json)
