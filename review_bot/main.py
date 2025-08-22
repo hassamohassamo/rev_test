@@ -1,27 +1,27 @@
+# review_bot/main.py
 import os, re, html, json, requests
 from typing import List, Dict, Tuple
 from .llm import review  # if not a package, change to: from llm import review
 
 # ---- helpers ----
-def gh(p: str, m="GET", **kw):
-    t = os.getenv("GITHUB_TOKEN"); 
+def gh(p: str, method="GET", **kw):
+    t=os.getenv("GITHUB_TOKEN"); 
     if not t: raise SystemExit("GITHUB_TOKEN missing.")
-    h = kw.pop("headers", {})
-    h.update({"Authorization": f"Bearer {t}", "Accept": "application/vnd.github+json"})
-    r = requests.request(m, f"https://api.github.com{p}", headers=h, timeout=30, **kw)
-    if r.status_code >= 400: raise SystemExit(f"GitHub {m} {p}: {r.status_code} {r.text[:400]}")
+    h=kw.pop("headers",{}); h.update({"Authorization":f"Bearer {t}","Accept":"application/vnd.github+json"})
+    r=requests.request(method, f"https://api.github.com{p}", headers=h, timeout=30, **kw)
+    if r.status_code>=400: raise SystemExit(f"GitHub {method} {p}: {r.status_code} {r.text[:400]}")
     return r.json()
 
-def ctx() -> Tuple[str,str,int,str]:
-    o,r = os.getenv("GITHUB_REPOSITORY","").split("/",1)
+def ctx()->Tuple[str,str,int,str]:
+    o,r=os.getenv("GITHUB_REPOSITORY","").split("/",1)
     with open(os.getenv("GITHUB_EVENT_PATH"),"r",encoding="utf-8") as f: e=json.load(f)
     pr=e["pull_request"]; return o,r,pr["number"],pr["head"]["sha"]
 
-def spec() -> str:
-    u,usr,tok = os.getenv("CONF_URL"), os.getenv("CONF_USERNAME"), os.getenv("CONF_API")
+def spec()->str:
+    u,usr,tok=os.getenv("CONF_URL"),os.getenv("CONF_USERNAME"),os.getenv("CONF_API")
     if not (u and usr and tok): raise SystemExit("Missing CONF_*")
-    j = requests.get(u,auth=(usr,tok),timeout=30).json()
-    s = (((j or {}).get("body") or {}).get("storage") or {}).get("value") or ""
+    j=requests.get(u,auth=(usr,tok),timeout=30).json()
+    s=(((j or {}).get("body") or {}).get("storage") or {}).get("value") or ""
     if s:
         x=re.sub(r"</p>","\n",s,flags=re.I); x=re.sub(r"<br\s*/?>","\n",x,flags=re.I); x=re.sub(r"<[^>]+>","",x)
         return html.unescape(x).strip()
@@ -50,12 +50,12 @@ def anchors(p:str)->List[int]:
     return (a+c) or [1]
 
 def post_sum(o,r,n,sha,body):
-    gh(f"/repos/{o}/{r}/pulls/{n}/reviews",method="POST",
+    gh(f"/repos/{o}/{r}/pulls/{n}/reviews", method="POST",
        json={"commit_id":sha,"event":"COMMENT","body":body[:65000]})
 
 def post_inline(o,r,n,sha,path,line,body)->bool:
     try:
-        gh(f"/repos/{o}/{r}/pulls/{n}/comments",method="POST",
+        gh(f"/repos/{o}/{r}/pulls/{n}/comments", method="POST",
            json={"body":body[:65000],"commit_id":sha,"path":path,"side":"RIGHT","line":int(line)})
         return True
     except SystemExit:
@@ -63,11 +63,11 @@ def post_inline(o,r,n,sha,path,line,body)->bool:
 
 # ---- LLM parsing ----
 FRE=re.compile(r"^##\s+(.+\.py)\s*$"); PRE=re.compile(r"^###\s+(.+)\s*$"); SRE=re.compile(r"```suggestion\b",re.I)
-def split_parts(md:str, files:List[Dict])->Dict[str,List[str]]:
+def split_parts(md:str,files:List[Dict])->Dict[str,List[str]]:
     secs={}; cur=None; buf=[]
     for ln in md.splitlines():
         m=FRE.match(ln.strip())
-        if m: 
+        if m:
             if cur and buf: secs[cur]=buf[:]
             cur=m.group(1).strip(); buf=[ln]
         elif cur: buf.append(ln)
@@ -110,9 +110,9 @@ def ensure_actionable(files:List[Dict], parts:Dict[str,List[str]], patches:Dict[
         for i,md in enumerate(ps):
             ln=an[i] if i<len(an) else an[-1]
             if not SRE.search(md or ""):
-                src = lines[ln-1] if 1<=ln<=len(lines) else ""
-                nl = (src if src.strip() else "#") + ("  # review-bot" if "review-bot" not in src else "")
-                md = md + "\n\n```suggestion\n" + nl + "\n```"
+                src=lines[ln-1] if 1<=ln<=len(lines) else ""
+                nl=(src if src.strip() else "#") + ("  # review-bot" if "review-bot" not in src else "")
+                md=md+"\n\n```suggestion\n"+nl+"\n```"
             cooked.append((md,ln))
         out[p]=cooked
     return out
@@ -123,7 +123,7 @@ def main():
     sp=spec()
     fs=changed(o,r,n)
     if not fs:
-        gh(f"/repos/{o}/{r}/issues/{n}/comments",method="POST",json={"body":"🤖 Review Bot: No Python changes."}); return
+        gh(f"/repos/{o}/{r}/issues/{n}/comments", method="POST", json={"body":"🤖 Review Bot: No Python changes."}); return
     md=review(sp,fs)
     per=split_parts(md,fs)
     meta=gh(f"/repos/{o}/{r}/pulls/{n}/files")
@@ -136,6 +136,6 @@ def main():
     if posted==0:
         allb=["### 🤖 Review Bot (fallback)"]
         for p,arr in lines.items(): allb.append(f"## {p}\n" + "\n\n---\n\n".join(md for md,_ in arr))
-        gh(f"/repos/{o}/{r}/issues/{n}/comments",method="POST",json={"body":"\n\n".join(allb)[:65000]})
+        gh(f"/repos/{o}/{r}/issues/{n}/comments", method="POST", json={"body":"\n\n".join(allb)[:65000]})
 
 if __name__=="__main__": main()
